@@ -1,5 +1,12 @@
 {
-  "buildCommand": "npm run build",
+  "version": 2,
+  "env": {
+    "NEXT_PUBLIC_APP_NAME": "BaseNote",
+    "NEXT_PUBLIC_APP_ENV": "production",
+    "NEXT_PUBLIC_BASE_URL": "",
+    "NEXT_TELEMETRY_DISABLED": "1"
+  },
   "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm run build",
   "outputDirectory": ".next"
 }
