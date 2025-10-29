@@ -3,7 +3,7 @@
 import * as Tabs from "@radix-ui/react-tabs"
 import InvestmentTracker from "@/components/investment-tracker"
 import TodoList from "@/components/todo-list"
-import Notes from "@/components/notes"
+import Notes from "@/components/Notes"
 
 export default function HomePage() {
   return (
