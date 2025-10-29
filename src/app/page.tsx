@@ -8,7 +8,10 @@ import Notes from "@/components/Notes"
 export default function HomePage() {
   return (
     <main className="max-w-5xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">BaseNote</h1>
+      <h1 className="text-2xl font-bold mb-6">
+        <span className="text-[#0052FF]">Base</span>
+        <span className="text-white">Note</span>
+      </h1>
       <Tabs.Root defaultValue="investment" className="space-y-4">
         <Tabs.List className="flex gap-2">
           <Tabs.Trigger

@@ -182,7 +182,7 @@ export default function Notes() {
 
           {/* Canvas Background with Text Overlay */}
           <div className="relative w-full max-w-2xl mx-auto mb-6 rounded-xl overflow-hidden shadow-lg">
-            <img src="/canvas-bg.png" alt="Canvas Background" className="w-full h-auto block" />
+            <img src="/canvas-bg.svg" alt="Canvas Background" className="w-full h-auto block" />
             <div className="absolute inset-0 flex items-center justify-center p-8">
               <p
                 className="text-white text-center font-light text-lg leading-relaxed whitespace-pre-wrap break-words max-h-full overflow-hidden"
