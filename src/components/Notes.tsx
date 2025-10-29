@@ -131,6 +131,23 @@ export default function Notes() {
     setNotes(notes.map((n) => (n.id === note.id ? { ...n, isMinted: true } : n)))
   }
 
+  const handleSaveOnChain = async () => {
+    if (!canvasContent.trim()) {
+      alert("Please write a note before saving on-chain.")
+      return
+    }
+    const payload = {
+      type: "note" as const,
+      data: {
+        content: canvasContent,
+        font: selectedFont,
+        createdAt: new Date().toISOString(),
+      },
+    }
+    const { saveOnChain } = await import("@/lib/onchain")
+    await saveOnChain(payload)
+  }
+
   return (
     <div className="space-y-6">
       {/* Canvas Editor Mode */}
@@ -212,6 +229,14 @@ export default function Notes() {
             >
               <Save className="w-4 h-4" />
               Save Note
+            </Button>
+            <Button
+              onClick={handleSaveOnChain}
+              variant="outline"
+              className="flex-1 rounded-lg border-[#0052FF]/40 hover:bg-muted transition-all duration-200 hover:scale-105 flex items-center justify-center gap-2"
+            >
+              <Sparkles className="w-4 h-4 text-[#0052FF]" />
+              Save on-chain
             </Button>
             <Button
               onClick={() => {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Trash2, CheckCircle2 } from "lucide-react"
+import { Trash2, CheckCircle2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -65,7 +65,8 @@ export default function TodoList() {
   return (
     <div className="space-y-6">
       {/* Filter Bar */}
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center justify-between">
+        <div className="flex gap-2">
         {[
           { id: "all", label: "All" },
           { id: "active", label: "Active" },
@@ -83,6 +84,17 @@ export default function TodoList() {
             {f.label}
           </button>
         ))}
+        </div>
+        <button
+          onClick={async () => {
+            const { saveOnChain } = await import("@/lib/onchain")
+            await saveOnChain({ type: "todo", data: { todos } })
+          }}
+          className="px-4 py-2 rounded-full text-sm font-medium bg-[#0052FF] text-white hover:bg-[#0052FF]/90 flex items-center gap-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          Save on-chain
+        </button>
       </div>
 
       {/* Add Todo Form */}

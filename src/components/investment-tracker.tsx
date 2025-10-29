@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Trash2, Edit2, TrendingUp } from "lucide-react"
+import { Trash2, Edit2, TrendingUp, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -65,7 +65,19 @@ export default function InvestmentTracker() {
               ${totalInvestment.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </p>
           </div>
-          <TrendingUp className="w-12 h-12 text-[#0052FF]/30 transition-transform duration-300 hover:scale-110" />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                const { saveOnChain } = await import("@/lib/onchain")
+                await saveOnChain({ type: "investment", data: { investments, total: totalInvestment } })
+              }}
+              className="px-4 py-2 rounded-full text-sm font-medium bg-[#0052FF] text-white hover:bg-[#0052FF]/90 flex items-center gap-2"
+            >
+              <Sparkles className="w-4 h-4" />
+              Save on-chain
+            </button>
+            <TrendingUp className="w-12 h-12 text-[#0052FF]/30 transition-transform duration-300 hover:scale-110" />
+          </div>
         </div>
       </Card>
 

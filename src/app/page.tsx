@@ -5,13 +5,18 @@ import InvestmentTracker from "@/components/investment-tracker"
 import TodoList from "@/components/todo-list"
 import Notes from "@/components/Notes"
 
+import WalletConnectButton from "@/components/wallet-connect"
+
 export default function HomePage() {
   return (
     <main className="max-w-5xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">
-        <span className="text-[#0052FF]">Base</span>
-        <span className="text-white">Note</span>
-      </h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">
+          <span className="text-[#0052FF]">Base</span>
+          <span className="text-white">Note</span>
+        </h1>
+        <WalletConnectButton />
+      </div>
       <Tabs.Root defaultValue="investment" className="space-y-4">
         <Tabs.List className="flex gap-2">
           <Tabs.Trigger
