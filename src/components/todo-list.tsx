@@ -86,17 +86,30 @@ export default function TodoList() {
         ))}
         </div>
         <button
-          onClick={async () => {
-            try {
-              const { sendEthTransaction } = await import("@/lib/onchain")
-              const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
-              console.log("Save todos on-chain tx:", txHash, { todos })
-              alert(`Saved on-chain. Tx Hash: ${txHash}`)
-            } catch (e: any) {
-              console.error("Save todos failed", e)
-              alert(e?.message ?? "Save on-chain failed")
-            }
-          }}
+              onClick={async () => {
+                try {
+                  const { sendEthTransaction, waitForTxReceipt, sendContractTransaction } = await import("@/lib/onchain")
+                  const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
+                  await waitForTxReceipt(txHash)
+                  const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
+                  const { storageAddress } = getContractAddresses()
+                  if (!storageAddress) {
+                    alert("Storage contract address missing. Set NEXT_PUBLIC_BASE_NOTE_STORAGE_ADDRESS.")
+                    return
+                  }
+                  const saveHash = await sendContractTransaction({
+                    to: storageAddress,
+                    abi: BASE_NOTE_STORAGE_ABI as any,
+                    functionName: "saveTodos",
+                    args: [JSON.stringify(todos)],
+                  })
+                  await waitForTxReceipt(saveHash)
+                  alert(`Saved on-chain. Tx Hash: ${saveHash}`)
+                } catch (e: any) {
+                  console.error("Save todos failed", e)
+                  alert(e?.message ?? "Save on-chain failed")
+                }
+              }}
           className="px-4 py-2 rounded-full text-sm font-medium bg-[#0052FF] text-white hover:bg-[#0052FF]/90 flex items-center gap-2"
         >
           <Sparkles className="w-4 h-4" />

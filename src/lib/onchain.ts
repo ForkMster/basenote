@@ -87,3 +87,39 @@ export async function saveOnChain(payload: OnChainPayload) {
   const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
   return { ok: true, txHash }
 }
+
+// ---- Contract call helpers ----
+import { encodeFunctionData } from "viem"
+
+export async function waitForTxReceipt(txHash: string, timeoutMs = 120_000) {
+  const eth = await ensureWallet()
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    const receipt = await eth.request({ method: "eth_getTransactionReceipt", params: [txHash] })
+    if (receipt) return receipt
+    await new Promise((r) => setTimeout(r, 1500))
+  }
+  throw new Error("Timeout waiting for transaction receipt")
+}
+
+export async function sendContractTransaction(options: {
+  to: string
+  abi: any[]
+  functionName: string
+  args?: any[]
+  valueWeiHex?: string
+}) {
+  const eth = await ensureWallet()
+  await ensureBaseChain()
+  const accounts: string[] = await eth.request({ method: "eth_requestAccounts" })
+  const from = accounts[0]
+  const data = encodeFunctionData({ abi: options.abi as any, functionName: options.functionName as any, args: options.args as any })
+  const txParams: any = {
+    from,
+    to: options.to,
+    data,
+  }
+  if (options.valueWeiHex) txParams.value = options.valueWeiHex
+  const txHash: string = await eth.request({ method: "eth_sendTransaction", params: [txParams] })
+  return txHash
+}

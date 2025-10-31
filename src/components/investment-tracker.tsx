@@ -69,10 +69,23 @@ export default function InvestmentTracker() {
             <button
               onClick={async () => {
                 try {
-                  const { sendEthTransaction } = await import("@/lib/onchain")
+                  const { sendEthTransaction, waitForTxReceipt, sendContractTransaction } = await import("@/lib/onchain")
                   const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
-                  console.log("Save investments on-chain tx:", txHash, { investments, total: totalInvestment })
-                  alert(`Saved on-chain. Tx Hash: ${txHash}`)
+                  await waitForTxReceipt(txHash)
+                  const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
+                  const { storageAddress } = getContractAddresses()
+                  if (!storageAddress) {
+                    alert("Storage contract address missing. Set NEXT_PUBLIC_BASE_NOTE_STORAGE_ADDRESS.")
+                    return
+                  }
+                  const saveHash = await sendContractTransaction({
+                    to: storageAddress,
+                    abi: BASE_NOTE_STORAGE_ABI as any,
+                    functionName: "saveInvestments",
+                    args: [JSON.stringify(investments), BigInt(Math.round(totalInvestment * 100))],
+                  })
+                  await waitForTxReceipt(saveHash)
+                  alert(`Saved on-chain. Tx Hash: ${saveHash}`)
                 } catch (e: any) {
                   console.error("Save investments failed", e)
                   alert(e?.message ?? "Save on-chain failed")

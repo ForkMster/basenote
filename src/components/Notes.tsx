@@ -40,6 +40,7 @@ export default function Notes() {
   const [walletAddress, setWalletAddress] = useState("0x...")
   const [selectedFont, setSelectedFont] = useState("Inter, sans-serif")
   const [showFontMenu, setShowFontMenu] = useState(false)
+  const [mintModal, setMintModal] = useState<{ open: boolean; txHash?: string }>({ open: false })
 
   useEffect(() => {
     const savedNotes = localStorage.getItem("basenote-notes")
@@ -126,12 +127,27 @@ export default function Notes() {
     }
 
     // Trigger wallet confirmation for mint (USD $0.10 equivalent in ETH)
-    import("@/lib/onchain").then(async ({ sendEthTransaction }) => {
+import("@/lib/onchain").then(async ({ sendEthTransaction, sendContractTransaction, waitForTxReceipt }) => {
       try {
         const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.10)
         console.log("Mint (payment) tx:", txHash, nftMetadata)
+        await waitForTxReceipt(txHash)
+        // Call NFT contract mint
+        const { getContractAddresses, BASE_NOTE_NFT_ABI } = await import("@/lib/contracts")
+        const { nftAddress } = getContractAddresses()
+        if (!nftAddress) {
+          alert("NFT contract address missing. Set NEXT_PUBLIC_BASE_NOTE_NFT_ADDRESS.")
+          return
+        }
+        const mintHash = await sendContractTransaction({
+          to: nftAddress,
+          abi: BASE_NOTE_NFT_ABI as any,
+          functionName: "mintNoteAsNFT",
+          args: [BigInt(note.id), note.content, note.font || "Inter", "#0052FF"],
+        })
+        await waitForTxReceipt(mintHash)
         setNotes(notes.map((n) => (n.id === note.id ? { ...n, isMinted: true } : n)))
-        alert(`Mint requested. Tx Hash: ${txHash}`)
+        setMintModal({ open: true, txHash: mintHash })
       } catch (e: any) {
         console.error("Mint payment failed", e)
         alert(e?.message ?? "Mint failed")
@@ -145,13 +161,23 @@ export default function Notes() {
       return
     }
     try {
-      const { sendEthTransaction } = await import("@/lib/onchain")
+      const { sendEthTransaction, sendContractTransaction, waitForTxReceipt } = await import("@/lib/onchain")
       const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
-      console.log("Save note on-chain tx:", txHash, {
-        content: canvasContent,
-        font: selectedFont,
+      await waitForTxReceipt(txHash)
+      const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
+      const { storageAddress } = getContractAddresses()
+      if (!storageAddress) {
+        alert("Storage contract address missing. Set NEXT_PUBLIC_BASE_NOTE_STORAGE_ADDRESS.")
+        return
+      }
+      const saveHash = await sendContractTransaction({
+        to: storageAddress,
+        abi: BASE_NOTE_STORAGE_ABI as any,
+        functionName: "saveNote",
+        args: [canvasContent, selectedFont || "Inter", "#0052FF", BigInt(Date.now())],
       })
-      alert(`Saved on-chain. Tx Hash: ${txHash}`)
+      await waitForTxReceipt(saveHash)
+      alert(`Saved on-chain. Tx Hash: ${saveHash}`)
     } catch (e: any) {
       console.error("Save on-chain failed", e)
       alert(e?.message ?? "Save on-chain failed")
@@ -160,6 +186,42 @@ export default function Notes() {
 
   return (
     <div className="space-y-6">
+      {mintModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <Card className="p-6 max-w-md w-full">
+            <h3 className="text-xl font-semibold mb-2">🎉 Congratulations!</h3>
+            <p className="text-sm text-muted-foreground mb-4">Your note has been minted as an NFT on Base.</p>
+            {mintModal.txHash && (
+              <a
+                href={`https://basescan.org/tx/${mintModal.txHash}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-[#0052FF] underline mb-4 inline-block"
+              >
+                View transaction on Basescan
+              </a>
+            )}
+            <div className="flex gap-3">
+              <Button
+                className="bg-[#0052FF] text-white"
+                onClick={() => {
+                  const text = encodeURIComponent("I minted a BaseNote NFT on Base ✨")
+                  const url = mintModal.txHash
+                    ? `https://basescan.org/tx/${mintModal.txHash}`
+                    : `https://basescan.org/`
+                  const share = `https://warpcast.com/~/compose?text=${text}&embeds[]=${encodeURIComponent(url)}`
+                  window.open(share, "_blank")
+                }}
+              >
+                Share to Farcaster
+              </Button>
+              <Button variant="outline" onClick={() => setMintModal({ open: false })}>
+                Close
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
       {/* Canvas Editor Mode */}
       {isCanvasMode ? (
         <Card className="p-6 shadow-md hover:shadow-lg transition-all duration-300">
