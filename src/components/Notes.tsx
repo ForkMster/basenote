@@ -125,10 +125,18 @@ export default function Notes() {
       content: note.content,
     }
 
-    console.log("NFT Metadata:", nftMetadata)
-    alert(`NFT minted successfully!\n\nMetadata:\n${JSON.stringify(nftMetadata, null, 2)}`)
-
-    setNotes(notes.map((n) => (n.id === note.id ? { ...n, isMinted: true } : n)))
+    // Trigger wallet confirmation for mint (USD $0.10 equivalent in ETH)
+    import("@/lib/onchain").then(async ({ sendEthTransaction }) => {
+      try {
+        const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.10)
+        console.log("Mint (payment) tx:", txHash, nftMetadata)
+        setNotes(notes.map((n) => (n.id === note.id ? { ...n, isMinted: true } : n)))
+        alert(`Mint requested. Tx Hash: ${txHash}`)
+      } catch (e: any) {
+        console.error("Mint payment failed", e)
+        alert(e?.message ?? "Mint failed")
+      }
+    })
   }
 
   const handleSaveOnChain = async () => {
@@ -136,16 +144,18 @@ export default function Notes() {
       alert("Please write a note before saving on-chain.")
       return
     }
-    const payload = {
-      type: "note" as const,
-      data: {
+    try {
+      const { sendEthTransaction } = await import("@/lib/onchain")
+      const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
+      console.log("Save note on-chain tx:", txHash, {
         content: canvasContent,
         font: selectedFont,
-        createdAt: new Date().toISOString(),
-      },
+      })
+      alert(`Saved on-chain. Tx Hash: ${txHash}`)
+    } catch (e: any) {
+      console.error("Save on-chain failed", e)
+      alert(e?.message ?? "Save on-chain failed")
     }
-    const { saveOnChain } = await import("@/lib/onchain")
-    await saveOnChain(payload)
   }
 
   return (

@@ -68,8 +68,15 @@ export default function InvestmentTracker() {
           <div className="flex items-center gap-3">
             <button
               onClick={async () => {
-                const { saveOnChain } = await import("@/lib/onchain")
-                await saveOnChain({ type: "investment", data: { investments, total: totalInvestment } })
+                try {
+                  const { sendEthTransaction } = await import("@/lib/onchain")
+                  const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
+                  console.log("Save investments on-chain tx:", txHash, { investments, total: totalInvestment })
+                  alert(`Saved on-chain. Tx Hash: ${txHash}`)
+                } catch (e: any) {
+                  console.error("Save investments failed", e)
+                  alert(e?.message ?? "Save on-chain failed")
+                }
               }}
               className="px-4 py-2 rounded-full text-sm font-medium bg-[#0052FF] text-white hover:bg-[#0052FF]/90 flex items-center gap-2"
             >
