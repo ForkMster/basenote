@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useWallet } from "@/app/providers"
 import { Trash2, FileText, Sparkles, Save, Type } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -37,12 +38,14 @@ export default function Notes() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [canvasContent, setCanvasContent] = useState("")
-  const [walletAddress, setWalletAddress] = useState("0x...")
+  const { address, isConnected } = useWallet()
   const [selectedFont, setSelectedFont] = useState("Inter, sans-serif")
   const [showFontMenu, setShowFontMenu] = useState(false)
-  const [mintModal, setMintModal] = useState<{ open: boolean; txHash?: string }>({ open: false })
+  const [mintModal, setMintModal] = useState<{ open: boolean; txHash?: string; tokenLink?: string }>({ open: false })
 
   useEffect(() => {
+    // Only hydrate from local storage when connected (otherwise show empty UI)
+    if (!isConnected) return
     const savedNotes = localStorage.getItem("basenote-notes")
     const savedDraft = localStorage.getItem("basenote-draft")
     const savedFont = localStorage.getItem("basenote-font")
@@ -66,9 +69,10 @@ export default function Notes() {
     if (savedFont) {
       setSelectedFont(savedFont)
     }
-  }, [])
+  }, [isConnected])
 
   useEffect(() => {
+    if (!isConnected) return
     if (canvasContent) {
       const updatedDraft = {
         content: canvasContent,
@@ -81,6 +85,7 @@ export default function Notes() {
   }, [canvasContent, selectedFont])
 
   useEffect(() => {
+    if (!isConnected) return
     localStorage.setItem("basenote-notes", JSON.stringify(notes))
   }, [notes])
 
@@ -117,7 +122,7 @@ export default function Notes() {
       name: `BaseNote - ${note.createdAt}`,
       description: `Created on ${note.createdAt} via BaseNote`,
       attributes: [
-        { trait_type: "Creator", value: walletAddress },
+        { trait_type: "Creator", value: address },
         { trait_type: "Date", value: note.createdAt },
         { trait_type: "Content Length", value: note.content.length.toString() },
         { trait_type: "Font", value: note.font || "Inter" },
@@ -126,12 +131,9 @@ export default function Notes() {
       content: note.content,
     }
 
-    // Trigger wallet confirmation for mint (USD $0.10 equivalent in ETH)
-import("@/lib/onchain").then(async ({ sendEthTransaction, sendContractTransaction, waitForTxReceipt }) => {
+    // Free mint: no upfront ETH payment, call contract directly
+import("@/lib/onchain").then(async ({ sendContractTransaction, waitForTxReceipt, extractMintedTokenId }) => {
       try {
-        const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.10)
-        console.log("Mint (payment) tx:", txHash, nftMetadata)
-        await waitForTxReceipt(txHash)
         // Call NFT contract mint
         const { getContractAddresses, BASE_NOTE_NFT_ABI } = await import("@/lib/contracts")
         const { nftAddress } = getContractAddresses()
@@ -145,9 +147,16 @@ import("@/lib/onchain").then(async ({ sendEthTransaction, sendContractTransactio
           functionName: "mintNoteAsNFT",
           args: [BigInt(note.id), note.content, note.font || "Inter", "#0052FF"],
         })
-        await waitForTxReceipt(mintHash)
+        const receipt = await waitForTxReceipt(mintHash)
         setNotes(notes.map((n) => (n.id === note.id ? { ...n, isMinted: true } : n)))
-        setMintModal({ open: true, txHash: mintHash })
+        let tokenId: bigint | null = null
+        try {
+          tokenId = extractMintedTokenId(receipt, BASE_NOTE_NFT_ABI as any)
+        } catch {}
+        const tokenLink = tokenId
+          ? `https://basescan.org/token/${getContractAddresses().nftAddress}?a=${tokenId.toString()}`
+          : undefined
+        setMintModal({ open: true, txHash: mintHash, tokenLink })
       } catch (e: any) {
         console.error("Mint payment failed", e)
         alert(e?.message ?? "Mint failed")
@@ -176,12 +185,82 @@ import("@/lib/onchain").then(async ({ sendEthTransaction, sendContractTransactio
         functionName: "saveNote",
         args: [canvasContent, selectedFont || "Inter", "#0052FF", BigInt(Date.now())],
       })
-      await waitForTxReceipt(saveHash)
+      const receipt = await waitForTxReceipt(saveHash)
+      // Refetch latest on-chain notes for this address
+      try {
+        const { readContractString } = await import("@/lib/onchain")
+        const json = await readContractString({ to: storageAddress, abi: BASE_NOTE_STORAGE_ABI as any, functionName: "getNotes" })
+        if (json) {
+          const parsed = JSON.parse(json)
+          if (Array.isArray(parsed)) {
+            const mapped: Note[] = parsed.map((n: any, idx: number) => ({
+              id: (n?.timestamp?.toString?.() ?? Date.now().toString()) + "_" + idx,
+              title: `Note - ${new Date(Number(n?.timestamp ?? Date.now())).toLocaleDateString()}`,
+              content: n?.content ?? "",
+              createdAt: new Date(Number(n?.timestamp ?? Date.now())).toLocaleDateString(),
+              font: n?.font ?? selectedFont,
+              isMinted: false,
+            }))
+            setNotes(mapped)
+          }
+        }
+      } catch (e) {
+        console.warn("Refetch after save failed", e)
+      }
       alert(`Saved on-chain. Tx Hash: ${saveHash}`)
     } catch (e: any) {
       console.error("Save on-chain failed", e)
       alert(e?.message ?? "Save on-chain failed")
     }
+  }
+
+  useEffect(() => {
+    (async () => {
+      if (!isConnected || !address) return
+      try {
+        const { readContractString } = await import("@/lib/onchain")
+        const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
+        const { storageAddress } = getContractAddresses()
+        if (!storageAddress) return
+        const json = await readContractString({ to: storageAddress, abi: BASE_NOTE_STORAGE_ABI as any, functionName: "getNotes" })
+        if (json) {
+          const parsed = JSON.parse(json)
+          if (Array.isArray(parsed)) {
+            const mapped: Note[] = parsed.map((n: any, idx: number) => ({
+              id: (n?.timestamp?.toString?.() ?? Date.now().toString()) + "_" + idx,
+              title: `Note - ${new Date(Number(n?.timestamp ?? Date.now())).toLocaleDateString()}`,
+              content: n?.content ?? "",
+              createdAt: new Date(Number(n?.timestamp ?? Date.now())).toLocaleDateString(),
+              font: n?.font ?? selectedFont,
+              isMinted: false,
+            }))
+            setNotes(mapped)
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read on-chain notes", e)
+      }
+    })()
+  }, [isConnected, address])
+
+  // Clear user data on wallet disconnect for a clean UI
+  useEffect(() => {
+    if (!isConnected) {
+      setNotes([])
+      setCanvasContent("")
+      setMintModal({ open: false })
+    }
+  }, [isConnected])
+
+  if (!isConnected) {
+    return (
+      <div className="space-y-6">
+        <Card className="p-12 text-center shadow-md hover:shadow-lg transition-all duration-300">
+          <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4 transition-transform duration-300" />
+          <p className="text-muted-foreground">Connect your wallet to create, save, or mint notes.</p>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -201,12 +280,24 @@ import("@/lib/onchain").then(async ({ sendEthTransaction, sendContractTransactio
                 View transaction on Basescan
               </a>
             )}
+            {mintModal.tokenLink && (
+              <a
+                href={mintModal.tokenLink}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-[#0052FF] underline mb-4 inline-block"
+              >
+                View minted NFT
+              </a>
+            )}
             <div className="flex gap-3">
               <Button
                 className="bg-[#0052FF] text-white"
                 onClick={() => {
                   const text = encodeURIComponent("I minted a BaseNote NFT on Base ✨")
-                  const url = mintModal.txHash
+                  const url = mintModal.tokenLink
+                    ? mintModal.tokenLink
+                    : mintModal.txHash
                     ? `https://basescan.org/tx/${mintModal.txHash}`
                     : `https://basescan.org/`
                   const share = `https://warpcast.com/~/compose?text=${text}&embeds[]=${encodeURIComponent(url)}`

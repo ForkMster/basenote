@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Trash2, CheckCircle2, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DotFilledIcon } from "@radix-ui/react-icons"
+import { useWallet } from "@/app/providers"
 
 interface Todo {
   id: string
@@ -19,6 +20,7 @@ interface Todo {
 
 export default function TodoList() {
   const [todos, setTodos] = useState<Todo[]>([])
+  const { address, isConnected } = useWallet()
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all")
   const [formData, setFormData] = useState({
     title: "",
@@ -60,6 +62,54 @@ export default function TodoList() {
     high: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
     medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
     low: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+  }
+
+  // Load on-chain todos when wallet connects
+  useEffect(() => {
+    (async () => {
+      if (!isConnected || !address) return
+      try {
+        const { readContractString } = await import("@/lib/onchain")
+        const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
+        const { storageAddress } = getContractAddresses()
+        if (!storageAddress) return
+        const json = await readContractString({ to: storageAddress, abi: BASE_NOTE_STORAGE_ABI as any, functionName: "getTodos" })
+        if (json) {
+          const parsed = JSON.parse(json)
+          if (Array.isArray(parsed)) {
+            const mapped: Todo[] = parsed.map((t: any, idx: number) => ({
+              id: (t?.id?.toString?.() ?? Date.now().toString()) + "_" + idx,
+              title: t?.title ?? "",
+              description: t?.description ?? "",
+              priority: (t?.priority as any) ?? "medium",
+              dueDate: t?.dueDate ?? "",
+              completed: !!t?.completed,
+            }))
+            setTodos(mapped)
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read on-chain todos", e)
+      }
+    })()
+  }, [isConnected, address])
+
+  // Clear todos when wallet disconnects
+  useEffect(() => {
+    if (!isConnected) {
+      setTodos([])
+    }
+  }, [isConnected])
+
+  if (!isConnected) {
+    return (
+      <div className="space-y-6">
+        <Card className="p-12 text-center shadow-md hover:shadow-lg transition-all duration-300">
+          <DotFilledIcon className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4 transition-transform duration-300" />
+          <p className="text-muted-foreground">Connect your wallet to manage your todos.</p>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -104,6 +154,27 @@ export default function TodoList() {
                     args: [JSON.stringify(todos)],
                   })
                   await waitForTxReceipt(saveHash)
+                  // Refetch latest on-chain todos for this address
+                  try {
+                    const { readContractString } = await import("@/lib/onchain")
+                    const json = await readContractString({ to: storageAddress, abi: BASE_NOTE_STORAGE_ABI as any, functionName: "getTodos" })
+                    if (json) {
+                      const parsed = JSON.parse(json)
+                      if (Array.isArray(parsed)) {
+                        const mapped: Todo[] = parsed.map((t: any, idx: number) => ({
+                          id: (t?.id?.toString?.() ?? Date.now().toString()) + "_" + idx,
+                          title: t?.title ?? "",
+                          description: t?.description ?? "",
+                          priority: (t?.priority as any) ?? "medium",
+                          dueDate: t?.dueDate ?? "",
+                          completed: !!t?.completed,
+                        }))
+                        setTodos(mapped)
+                      }
+                    }
+                  } catch (e) {
+                    console.warn("Refetch after save todos failed", e)
+                  }
                   alert(`Saved on-chain. Tx Hash: ${saveHash}`)
                 } catch (e: any) {
                   console.error("Save todos failed", e)
@@ -216,3 +287,5 @@ export default function TodoList() {
     </div>
   )
 }
+
+// Clear user data on wallet disconnect handled at page-level via useWallet in components using it

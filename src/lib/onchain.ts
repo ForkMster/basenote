@@ -89,7 +89,7 @@ export async function saveOnChain(payload: OnChainPayload) {
 }
 
 // ---- Contract call helpers ----
-import { encodeFunctionData } from "viem"
+import { encodeFunctionData, decodeFunctionResult, decodeEventLog } from "viem"
 
 export async function waitForTxReceipt(txHash: string, timeoutMs = 120_000) {
   const eth = await ensureWallet()
@@ -122,4 +122,35 @@ export async function sendContractTransaction(options: {
   if (options.valueWeiHex) txParams.value = options.valueWeiHex
   const txHash: string = await eth.request({ method: "eth_sendTransaction", params: [txParams] })
   return txHash
+}
+
+export async function readContractString(options: { to: string; abi: any[]; functionName: string }) {
+  const eth = await ensureWallet()
+  await ensureBaseChain()
+  const data = encodeFunctionData({ abi: options.abi as any, functionName: options.functionName as any, args: [] })
+  const result: string = await eth.request({ method: "eth_call", params: [{ to: options.to, data }, "latest"] })
+  const decoded = decodeFunctionResult({ abi: options.abi as any, functionName: options.functionName as any, data: result }) as any
+  if (typeof decoded === "string") return decoded
+  if (Array.isArray(decoded) && typeof decoded[0] === "string") return decoded[0]
+  return ""
+}
+
+export function extractMintedTokenId(receipt: any, abi: any[]) {
+  try {
+    const logs = receipt?.logs || []
+    for (const log of logs) {
+      try {
+        const ev = decodeEventLog({ abi: abi as any, data: log.data, topics: log.topics }) as any
+        if (ev?.eventName === "NoteMinted") {
+          const tokenId = ev?.args?.tokenId
+          return typeof tokenId === "bigint" ? tokenId : BigInt(tokenId)
+        }
+        if (ev?.eventName === "Transfer") {
+          const tokenId = ev?.args?.tokenId
+          return typeof tokenId === "bigint" ? tokenId : BigInt(tokenId)
+        }
+      } catch {}
+    }
+  } catch {}
+  return null
 }

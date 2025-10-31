@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Trash2, Edit2, TrendingUp, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useWallet } from "@/app/providers"
 
 interface Investment {
   id: string
@@ -18,6 +19,7 @@ interface Investment {
 
 export default function InvestmentTracker() {
   const [investments, setInvestments] = useState<Investment[]>([])
+  const { address, isConnected } = useWallet()
   const [formData, setFormData] = useState({
     name: "",
     amount: "",
@@ -54,6 +56,54 @@ export default function InvestmentTracker() {
     other: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
   }
 
+  // Load on-chain investments when wallet connects
+  useEffect(() => {
+    (async () => {
+      if (!isConnected || !address) return
+      try {
+        const { readContractString } = await import("@/lib/onchain")
+        const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
+        const { storageAddress } = getContractAddresses()
+        if (!storageAddress) return
+        const json = await readContractString({ to: storageAddress, abi: BASE_NOTE_STORAGE_ABI as any, functionName: "getInvestments" })
+        if (json) {
+          const parsed = JSON.parse(json)
+          if (Array.isArray(parsed)) {
+            const mapped: Investment[] = parsed.map((inv: any, idx: number) => ({
+              id: (inv?.id?.toString?.() ?? Date.now().toString()) + "_" + idx,
+              name: inv?.name ?? "",
+              amount: Number(inv?.amount ?? 0),
+              category: inv?.category ?? "stocks",
+              date: inv?.date ?? "",
+              notes: inv?.notes ?? "",
+            }))
+            setInvestments(mapped)
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to read on-chain investments", e)
+      }
+    })()
+  }, [isConnected, address])
+
+  // Clear investments when wallet disconnects
+  useEffect(() => {
+    if (!isConnected) {
+      setInvestments([])
+    }
+  }, [isConnected])
+
+  if (!isConnected) {
+    return (
+      <div className="space-y-6">
+        <Card className="p-12 text-center shadow-md hover:shadow-lg transition-all duration-300">
+          <TrendingUp className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4 transition-transform duration-300" />
+          <p className="text-muted-foreground">Connect your wallet to track and save investments.</p>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Total Investment Card */}
@@ -85,6 +135,27 @@ export default function InvestmentTracker() {
                     args: [JSON.stringify(investments), BigInt(Math.round(totalInvestment * 100))],
                   })
                   await waitForTxReceipt(saveHash)
+                  // Refetch latest on-chain investments for this address
+                  try {
+                    const { readContractString } = await import("@/lib/onchain")
+                    const json = await readContractString({ to: storageAddress, abi: BASE_NOTE_STORAGE_ABI as any, functionName: "getInvestments" })
+                    if (json) {
+                      const parsed = JSON.parse(json)
+                      if (Array.isArray(parsed)) {
+                        const mapped: Investment[] = parsed.map((inv: any, idx: number) => ({
+                          id: (inv?.id?.toString?.() ?? Date.now().toString()) + "_" + idx,
+                          name: inv?.name ?? "",
+                          amount: Number(inv?.amount ?? 0),
+                          category: inv?.category ?? "stocks",
+                          date: inv?.date ?? "",
+                          notes: inv?.notes ?? "",
+                        }))
+                        setInvestments(mapped)
+                      }
+                    }
+                  } catch (e) {
+                    console.warn("Refetch after save investments failed", e)
+                  }
                   alert(`Saved on-chain. Tx Hash: ${saveHash}`)
                 } catch (e: any) {
                   console.error("Save investments failed", e)

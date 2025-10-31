@@ -34,6 +34,28 @@ export const BASE_NOTE_STORAGE_ABI = [
     ],
     outputs: [],
   },
+  // Read functions (assumed JSON returns for simplicity)
+  {
+    type: "function",
+    name: "getNotes",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "json", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "getTodos",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "json", type: "string" }],
+  },
+  {
+    type: "function",
+    name: "getInvestments",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "json", type: "string" }],
+  },
 ] as const
 
 export function getContractAddresses() {
