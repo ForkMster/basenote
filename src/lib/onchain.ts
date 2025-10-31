@@ -83,9 +83,8 @@ export type OnChainPayload = {
 }
 
 export async function saveOnChain(payload: OnChainPayload) {
-  // For now, saving on-chain involves a micro-transaction for proof-of-save
-  const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
-  return { ok: true, txHash }
+  // Deprecated: savings are free via direct contract calls (no ETH payment)
+  return { ok: true, txHash: undefined as any }
 }
 
 // ---- Contract call helpers ----

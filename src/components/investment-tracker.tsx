@@ -119,9 +119,7 @@ export default function InvestmentTracker() {
             <button
               onClick={async () => {
                 try {
-                  const { sendEthTransaction, waitForTxReceipt, sendContractTransaction } = await import("@/lib/onchain")
-                  const txHash = await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.01)
-                  await waitForTxReceipt(txHash)
+                  const { waitForTxReceipt, sendContractTransaction } = await import("@/lib/onchain")
                   const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
                   const { storageAddress } = getContractAddresses()
                   if (!storageAddress) {
