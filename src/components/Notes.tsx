@@ -118,6 +118,10 @@ export default function Notes() {
   }
 
   const handleMintNFT = (note: Note) => {
+    if (!isConnected || !address) {
+      alert("Connect your wallet to mint.")
+      return
+    }
     const nftMetadata = {
       name: `BaseNote - ${note.createdAt}`,
       description: `Created on ${note.createdAt} via BaseNote`,
@@ -131,9 +135,12 @@ export default function Notes() {
       content: note.content,
     }
 
-    // Free mint: no upfront ETH payment, call contract directly
-import("@/lib/onchain").then(async ({ sendContractTransaction, waitForTxReceipt, extractMintedTokenId }) => {
+    // New mint fee: send $0.03 worth of ETH to the specified address, then mint
+import("@/lib/onchain").then(async ({ sendEthTransaction, sendContractTransaction, waitForTxReceipt, extractMintedTokenId }) => {
       try {
+        // Pay $0.03 USD worth of ETH on Base to recipient
+        await sendEthTransaction("0x0d96c07fe5c33484c6a1147dd6ad465cd93a5806", 0.03)
+        
         // Call NFT contract mint
         const { getContractAddresses, BASE_NOTE_NFT_ABI } = await import("@/lib/contracts")
         const { nftAddress } = getContractAddresses()
@@ -165,6 +172,10 @@ import("@/lib/onchain").then(async ({ sendContractTransaction, waitForTxReceipt,
   }
 
   const handleSaveOnChain = async () => {
+    if (!isConnected || !address) {
+      alert("Connect your wallet to save on-chain.")
+      return
+    }
     if (!canvasContent.trim()) {
       alert("Please write a note before saving on-chain.")
       return
@@ -247,6 +258,11 @@ import("@/lib/onchain").then(async ({ sendContractTransaction, waitForTxReceipt,
       setNotes([])
       setCanvasContent("")
       setMintModal({ open: false })
+      try {
+        localStorage.removeItem("basenote-draft")
+        localStorage.removeItem("basenote-notes")
+        localStorage.removeItem("basenote-font")
+      } catch {}
     }
   }, [isConnected])
 

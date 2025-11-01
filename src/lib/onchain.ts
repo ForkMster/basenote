@@ -12,6 +12,15 @@ async function ensureWallet() {
   return eth
 }
 
+async function getConnectedAccount(eth?: any): Promise<string> {
+  const provider = eth || ((window as any).ethereum)
+  if (!provider) throw new Error("No wallet found. Please install MetaMask or a compatible wallet.")
+  const accounts: string[] = await provider.request({ method: "eth_accounts" })
+  const from = accounts && accounts.length ? accounts[0] : null
+  if (!from) throw new Error("Wallet not connected. Please connect your wallet.")
+  return from
+}
+
 export async function ensureBaseChain() {
   const eth = await ensureWallet()
   try {
@@ -64,9 +73,8 @@ export async function usdToWei(usdAmount: number): Promise<bigint> {
 export async function sendEthTransaction(toAddress: string, usdAmount: number) {
   const eth = await ensureWallet()
   await ensureBaseChain()
-  // Ensure we have an account
-  const accounts: string[] = await eth.request({ method: "eth_requestAccounts" })
-  const from = accounts[0]
+  // Require an already-connected account; do NOT prompt when disconnected
+  const from = await getConnectedAccount(eth)
   const wei = await usdToWei(usdAmount)
   const txParams = {
     from,
@@ -110,8 +118,7 @@ export async function sendContractTransaction(options: {
 }) {
   const eth = await ensureWallet()
   await ensureBaseChain()
-  const accounts: string[] = await eth.request({ method: "eth_requestAccounts" })
-  const from = accounts[0]
+  const from = await getConnectedAccount(eth)
   const data = encodeFunctionData({ abi: options.abi as any, functionName: options.functionName as any, args: options.args as any })
   const txParams: any = {
     from,

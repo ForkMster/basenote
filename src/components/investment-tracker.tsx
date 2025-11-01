@@ -29,6 +29,10 @@ export default function InvestmentTracker() {
   })
 
   const handleAddInvestment = () => {
+    if (!isConnected || !address) {
+      alert("Connect your wallet to add investments.")
+      return
+    }
     if (formData.name && formData.amount && formData.date) {
       const newInvestment: Investment = {
         id: Date.now().toString(),
@@ -118,6 +122,10 @@ export default function InvestmentTracker() {
           <div className="flex items-center gap-3">
             <button
               onClick={async () => {
+                if (!isConnected || !address) {
+                  alert("Connect your wallet to save on-chain.")
+                  return
+                }
                 try {
                   const { waitForTxReceipt, sendContractTransaction } = await import("@/lib/onchain")
                   const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
@@ -161,6 +169,7 @@ export default function InvestmentTracker() {
                 }
               }}
               className="px-4 py-2 rounded-full text-sm font-medium bg-[#0052FF] text-white hover:bg-[#0052FF]/90 flex items-center gap-2"
+              disabled={!isConnected}
             >
               <Sparkles className="w-4 h-4" />
               Save on-chain
@@ -214,6 +223,7 @@ export default function InvestmentTracker() {
         <Button
           onClick={handleAddInvestment}
           className="mt-4 w-full bg-[#0052FF] hover:bg-[#0052FF]/90 text-white rounded-lg shadow-lg transition-all duration-200 hover:shadow-xl hover:scale-105"
+          disabled={!isConnected}
         >
           Add Investment
         </Button>

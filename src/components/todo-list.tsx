@@ -45,10 +45,12 @@ export default function TodoList() {
   }
 
   const handleToggleTodo = (id: string) => {
+    if (!isConnected || !address) return
     setTodos(todos.map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo)))
   }
 
   const handleDeleteTodo = (id: string) => {
+    if (!isConnected || !address) return
     setTodos(todos.filter((todo) => todo.id !== id))
   }
 
@@ -137,6 +139,10 @@ export default function TodoList() {
         </div>
         <button
               onClick={async () => {
+                if (!isConnected || !address) {
+                  alert("Connect your wallet to save on-chain.")
+                  return
+                }
                 try {
                   const { waitForTxReceipt, sendContractTransaction } = await import("@/lib/onchain")
                   const { getContractAddresses, BASE_NOTE_STORAGE_ABI } = await import("@/lib/contracts")
